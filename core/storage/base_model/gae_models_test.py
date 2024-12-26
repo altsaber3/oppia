@@ -26,6 +26,7 @@ from core import feconf
 from core.constants import constants
 from core.platform import models
 from core.tests import test_utils
+from datetime import datetime, timezone, timedelta
 
 from typing import Dict, List, Set, Union, cast
 
@@ -856,8 +857,75 @@ class VersionedModelTests(test_utils.GenericTestBase):
             # is used to test method get_multi_versions() for invalid input
             # type.
             TestVersionedModel.get_multi_versions('model_id1', [1, 1.5, 2]) # type: ignore[list-item]
-
-
+    def test_datetime_property_timezone_handling(self)->None:
+        from datetime import datetime, timezone, timedata
+         # Test 1: Timezone-naive timestamp (current implementation)
+        naive_model = TestBaseModel()
+        naive_timestamp = datetime.utcnow()
+        naive_model.last_updated = naive_timestamp
+        naive_model.update_timestamps()
+        naive_model.put()
+        print("I am at point 1")
+        retrieved_naive = TestBaseModel.get_by_id(naive_model.id)
+        self.assertIsNotNone(retrieved_naive)
+        self.assertIsNone(
+            retrieved_naive.last_updated.tzinfo,
+            'Timezone-naive timestamp should remain timezone-naive after storage'
+        )
+            # Test 2: Timezone-aware UTC timestamp (proposed approach)
+        print("I am test 2")
+        aware_model = TestBaseModel()
+        aware_timestamp = datetime.now(timezone.utc)
+        aware_model.last_updated = aware_timestamp
+        aware_model.update_timestamps()
+        aware_model.put()
+        
+        retrieved_aware = TestBaseModel.get_by_id(aware_model.id)
+        self.assertIsNotNone(retrieved_aware)
+        print("I am at test 3")
+        # Test 3: Non-UTC timezone (IST = UTC+5:30)
+        ist_offset = datetime.timedelta(hours=5, minutes=30)
+        ist_timezone = timezone(ist_offset)
+        base_time = datetime(2024, 1, 1, 12, 0, 0)
+        ist_time = base_time.replace(tzinfo=ist_timezone)
+        
+        ist_model = TestBaseModel()
+        ist_model.last_updated = ist_time
+        ist_model.update_timestamps()
+        ist_model.put()
+        
+        retrieved_ist = TestBaseModel.get_by_id(ist_model.id)
+        self.assertIsNotNone(retrieved_ist)
+        
+        # Test 4: Timestamp comparisons
+        models = []
+        timestamps = [
+            datetime(2024, 1, 1, 12, 0, 0),  # naive
+            datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc),  # UTC aware
+            datetime(2024, 1, 1, 12, 0, 0, tzinfo=ist_timezone)  # IST aware
+        ]
+        
+        for timestamp in timestamps:
+            model = TestBaseModel()
+            model.last_updated = timestamp
+            model.update_timestamps()
+            model.put()
+            models.append(model)
+        
+        # Query models ordered by timestamp to verify comparison behavior
+        ordered_models = (TestBaseModel.query()
+                        .order(TestBaseModel.last_updated)
+                        .fetch())
+        
+        self.assertEqual(len(ordered_models), 3)
+        
+        # Verify timestamp ordering is consistent
+        for i in range(len(ordered_models) - 1):
+            self.assertLessEqual(
+                ordered_models[i].last_updated,
+                ordered_models[i + 1].last_updated,
+                'Timestamps should maintain correct ordering regardless of timezone info'
+            )
 class TestBaseModel(base_models.BaseModel):
     """Model that inherits BaseModel for testing. This is required as BaseModel
     gets subclassed a lot in other tests and that can create unexpected errors.
@@ -880,3 +948,72 @@ class BaseModelTests(test_utils.GenericTestBase):
 
         with assert_raises_regexp_context_manager, get_by_id_swap:
             TestBaseModel.get_new_id('exploration')
+    def test_datetime_property_timezone_handling(self)->None:
+       
+         # Test 1: Timezone-naive timestamp (current implementation)
+        naive_model = TestBaseModel()
+        naive_timestamp = datetime.utcnow()
+        naive_model.last_updated = naive_timestamp
+        naive_model.update_timestamps()
+        naive_model.put()
+        print("I am at point 1")
+        retrieved_naive = TestBaseModel.get_by_id(naive_model.id)
+        self.assertIsNotNone(retrieved_naive)
+        self.assertIsNone(
+            retrieved_naive.last_updated.tzinfo,
+            'Timezone-naive timestamp should remain timezone-naive after storage'
+        )
+            # Test 2: Timezone-aware UTC timestamp (proposed approach)
+        print("I am test 2")
+        aware_model = TestBaseModel()
+        aware_timestamp = datetime.now(timezone.utc)
+        aware_model.last_updated = aware_timestamp
+        aware_model.update_timestamps()
+        aware_model.put()
+        
+        retrieved_aware = TestBaseModel.get_by_id(aware_model.id)
+        self.assertIsNotNone(retrieved_aware)
+        print("I am at test 3")
+        # Test 3: Non-UTC timezone (IST = UTC+5:30)
+        ist_offset = datetime.timedelta(hours=5, minutes=30)
+        ist_timezone = timezone(ist_offset)
+        base_time = datetime(2024, 1, 1, 12, 0, 0)
+        ist_time = base_time.replace(tzinfo=ist_timezone)
+        
+        ist_model = TestBaseModel()
+        ist_model.last_updated = ist_time
+        ist_model.update_timestamps()
+        ist_model.put()
+        
+        retrieved_ist = TestBaseModel.get_by_id(ist_model.id)
+        self.assertIsNotNone(retrieved_ist)
+        
+        # Test 4: Timestamp comparisons
+        models = []
+        timestamps = [
+            datetime(2024, 1, 1, 12, 0, 0),  # naive
+            datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc),  # UTC aware
+            datetime(2024, 1, 1, 12, 0, 0, tzinfo=ist_timezone)  # IST aware
+        ]
+        
+        for timestamp in timestamps:
+            model = TestBaseModel()
+            model.last_updated = timestamp
+            model.update_timestamps()
+            model.put()
+            models.append(model)
+        
+        # Query models ordered by timestamp to verify comparison behavior
+        ordered_models = (TestBaseModel.query()
+                        .order(TestBaseModel.last_updated)
+                        .fetch())
+        
+        self.assertEqual(len(ordered_models), 3)
+        
+        # Verify timestamp ordering is consistent
+        for i in range(len(ordered_models) - 1):
+            self.assertLessEqual(
+                ordered_models[i].last_updated,
+                ordered_models[i + 1].last_updated,
+                'Timestamps should maintain correct ordering regardless of timezone info'
+            )
